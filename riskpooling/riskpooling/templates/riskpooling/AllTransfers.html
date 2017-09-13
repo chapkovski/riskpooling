@@ -1,0 +1,43 @@
+{% extends "global/Page.html" %}
+{% load staticfiles otree_tags %}
+
+{% block title %}
+    <b>Year {{round_number}}</b> - {% if norequests == False %}All{% else %}No{% endif %} cattle transfers
+{% endblock %}
+
+{% block content %}
+
+{% if norequests == False %}
+    <p>
+        This year's cattle transfers:
+    </p>
+    <ul>
+        {% for sender, amount, receiver in all_transfers %}
+            <li>
+                {% if sender = player.id_in_group %}
+                    You
+                {% else %}
+                    Player {{sender}}
+                {% endif %}
+                sent <b>{{amount}}</b> to
+                {% if receiver = player.id_in_group %}
+                    you.
+                {% else %}
+                    Player {{receiver}}.
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>
+        There were no cattle transfers this year.
+    </p>
+{% endif %}
+
+<p>
+    Click Next to continue.
+</p>
+
+{% next_button %}
+
+{% endblock %}
