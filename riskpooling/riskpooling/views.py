@@ -1,21 +1,42 @@
 from otree.api import Currency as c, currency_range
 from . import models
 from ._builtin import Page, WaitPage
-from .models import Constants, Player
+from .models import Constants, Player, SendReceive
 import django
 from django import forms
+from .forms import SRFormSet
+from django.db.models import Q
+
+
+def vars_for_all_templates(self):
+    return {'herd_size_for_chart': int(self.player.participant.vars['herd_size']),
+            'observability': self.session.config['observability'],
+            'round_number': self.subsession.round_number,
+            'minherd': self.session.config['minherd'],
+            'charts': self.session.config['charts']
+            }
+
+
+class Wait(WaitPage):
+    def is_displayed(self):
+        return self.player.is_playing()
 
 
 class NewYear(Page):
     def is_displayed(self):
         return self.player.is_playing()
 
-    def vars_for_template(self):
-        return {'round_number': self.subsession.round_number}
-
     def before_next_page(self):
         self.player.set_growth()
         self.player.set_under_minimum_years_left()
+
+
+class NumPlayingWait(WaitPage):
+    def is_displayed(self):
+        return self.player.is_playing()
+
+    def after_all_players_arrive(self):
+        self.group.set_num_playing()
 
 
 class Growth(Page):
@@ -25,11 +46,12 @@ class Growth(Page):
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
                 'under_minimum_years_left': self.player.under_minimum_years_left,
-                'minherd': self.session.config['minherd'],
-                'round_number': self.subsession.round_number,
                 'herd_size_initial': self.player.herd_size_initial,
                 'herd_size_after_growth': self.player.herd_size_after_growth,
-                'other_players': self.player.get_others_in_group()}
+                'other_players': self.player.get_others_in_group(),
+                'num_players': self.group.num_playing,
+                'dead_remove': self.player.dead_remove
+                }
 
     def before_next_page(self):
         self.player.set_shock()
@@ -42,12 +64,21 @@ class Shock(Page):
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
                 'under_minimum_years_left': self.player.under_minimum_years_left,
-                'minherd': self.session.config['minherd'],
-                'round_number': self.subsession.round_number,
                 'herd_size_after_growth': self.player.herd_size_after_growth,
                 'herd_size_after_shock': self.player.herd_size_after_shock,
                 'shock_occurrence': self.player.shock_occurrence,
-                'other_players': self.player.get_others_in_group()}
+                'other_players': self.player.get_others_in_group(),
+                'num_players': self.group.num_playing,
+                'dead_remove': self.player.dead_remove
+                }
+
+
+class NoPlayersToRequest(Page):
+    def is_displayed(self):
+        return self.player.is_playing() and self.group.num_playing == 1
+
+    def vars_for_template(self):
+        return {'herd_size_after_shock': self.player.herd_size_after_shock}
 
 
 class Request(Page):
@@ -55,48 +86,48 @@ class Request(Page):
     form_fields = ['request']
 
     def is_displayed(self):
-        return self.player.is_playing()
+        return self.player.is_playing() and self.group.num_playing > 1
 
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
                 'under_minimum_years_left': self.player.under_minimum_years_left,
-                'minherd': self.session.config['minherd'],
-                'round_number': self.subsession.round_number,
                 'herd_size_after_shock': self.player.herd_size_after_shock,
-                'other_players': self.player.get_others_in_group()
+                'other_players': self.player.get_others_in_group(),
+                'num_players': self.group.num_playing,
+                'dead_remove': self.player.dead_remove
                 }
 
     def before_next_page(self):
+        self.player.set_request_player()
+
+
+class RequestsWait(WaitPage):
+    def is_displayed(self):
+        return self.player.is_playing() and self.group.num_playing > 1
+
+    def after_all_players_arrive(self):
         self.group.no_requests()
-
-
-class RequestPlayerForm(forms.Form):
-    def __init__(self, choices, *args, **kwargs):
-        super(RequestPlayerForm, self).__init__(*args, **kwargs)
-        self.fields['request_player'] = django.forms.CharField(
-            widget=django.forms.RadioSelect(choices=choices),
-            label='Which player would you like to request cattle from?')
 
 
 class RequestPlayer(Page):
     def is_displayed(self):
-        return self.player.is_playing() and self.player.request
+        return self.player.is_playing() and self.player.request and self.group.num_playing > 2
 
     form_model = models.Player
     form_fields = ['request_player']
 
+    def request_player_choices(self):
+        choices = []
+        for o in self.player.get_others_in_group():
+            choices.append((o.id_in_group, "Player {}".format(o.id_in_group)))
+        return choices
+
     def vars_for_template(self):
-        others = self.player.get_others_in_group()
-        # we need to show to Player 1 the choice of Player 2 and Player 3, and so on
-        choices = [(p.id_in_group, "Player {}".format(p.id_in_group)) for p in others]
-        requestplayerform = RequestPlayerForm(tuple(choices))
-        return {'myform': requestplayerform,
-                'under_minimum': self.player.under_minimum,
+        return {'under_minimum': self.player.under_minimum,
                 'under_minimum_years_left': self.player.under_minimum_years_left,
-                'minherd': self.session.config['minherd'],
-                'round_number': self.subsession.round_number,
                 'herd_size_after_shock': self.player.herd_size_after_shock,
-                'other_players': self.player.get_others_in_group()
+                'other_players': self.player.get_others_in_group(),
+                'dead_remove': self.player.dead_remove,
                 }
 
 
@@ -108,77 +139,47 @@ class RequestAmount(Page):
         return self.session.config['maxherd'] - self.participant.vars['herd_size']
 
     def is_displayed(self):
-        return self.player.is_playing() and self.player.request
+        return self.player.is_playing() and self.player.request and self.group.num_playing > 1
 
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
                 'under_minimum_years_left': self.player.under_minimum_years_left,
-                'minherd': self.session.config['minherd'],
-                'round_number': self.subsession.round_number,
                 'herd_size_after_shock': self.player.herd_size_after_shock,
                 'other_players': self.player.get_others_in_group(),
+                'request': self.player.request,
                 'request_player': self.player.request_player,
+                'num_players': self.group.num_playing,
+                'dead_remove': self.player.dead_remove,
                 }
+
+    def before_next_page(self):
+        if self.player.request:
+            target = Player.objects.get(id_in_group=self.player.request_player, subsession=self.subsession)
+            sr, created = self.player.receiver.get_or_create(sender=target,
+                                                             defaults={'amount_requested': self.player.request_amount})
+            sr.save()
 
 
 class Fulfill(Page):
-    form_model = models.Player
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['formset'] = SRFormSet(instance=self.player)
+        return context
 
-    def get_form_fields(self):
-        request_me = []
-        others = self.player.get_others_in_group()
-        for o in others:
-            if o.request_player == self.player.id_in_group:
-                request_me.append(o.id_in_group)
-        return ['fulfill{}'.format(p) for p in request_me]
+    def post(self):
+        context = super().get_context_data()
+        formset = SRFormSet(self.request.POST, instance=self.player)
+        context['formset'] = formset
+        if not formset.is_valid():
+            return self.render_to_response(context)
+        formset.save()
+        return super().post()
 
-    def fulfill1_max(self):
-        return self.participant.vars['herd_size']
-
-    def fulfill2_max(self):
-        return self.participant.vars['herd_size']
-
-    def fulfill3_max(self):
-        return self.participant.vars['herd_size']
-
-    def fulfill4_max(self):
-        return self.participant.vars['herd_size']
-
-    def error_message(self, values):
-        n = []
-        for p in self.group.get_players():
-            if p.request_player == self.player.id_in_group:
-                n.append(p.id_in_group)
-        if n == [1, 2]:
-            if values["fulfill1"] + values["fulfill2"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [1, 3]:
-            if values["fulfill1"] + values["fulfill3"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [1, 4]:
-            if values["fulfill1"] + values["fulfill4"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [2, 3]:
-            if values["fulfill2"] + values["fulfill3"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [2, 4]:
-            if values["fulfill2"] + values["fulfill4"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [3, 4]:
-            if values["fulfill3"] + values["fulfill4"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [1, 2, 3]:
-            if values["fulfill1"] + values["fulfill2"] + values["fulfill3"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [1, 2, 4]:
-            if values["fulfill1"] + values["fulfill2"] + values["fulfill4"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [1, 3, 4]:
-            if values["fulfill1"] + values["fulfill3"] + values["fulfill4"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
-        if n == [2, 3, 4]:
-            if values["fulfill2"] + values["fulfill3"] + values["fulfill4"] > self.participant.vars['herd_size']:
-                return 'In total, you have attempted to transfer more cattle than you currently own. Please try again.'
+    def before_next_page(self):
+        to_dump_sender = self.player.sender.values('receiver__id_in_group', 'amount_sent', 'amount_requested', )
+        to_dump_receiver = self.player.receiver.values('sender__id_in_group', 'amount_sent', 'amount_requested', )
+        self.player.sr_dump = {'sending': to_dump_sender,
+                               'receiving': to_dump_receiver}
 
     def vars_for_template(self):
         request_me = 0
@@ -186,33 +187,64 @@ class Fulfill(Page):
         for o in others:
             if o.request_player == self.player.id_in_group:
                 request_me += 1
-        return {'request_me': request_me, 'under_minimum': self.player.under_minimum,
+        return {'request_me': request_me,
+                'under_minimum': self.player.under_minimum,
                 'under_minimum_years_left': self.player.under_minimum_years_left,
-                'minherd': self.session.config['minherd'],
-                'round_number': self.subsession.round_number,
                 'herd_size_after_shock': self.player.herd_size_after_shock,
                 'other_players': self.player.get_others_in_group(),
+                'request': self.player.request,
                 'request_player': self.player.request_player,
+                'request_amount': self.player.request_amount,
+                'num_players': self.group.num_playing,
+                'dead_remove': self.player.dead_remove,
                 }
 
     def is_displayed(self):
-        return self.player.is_playing() and self.group.norequests is False
+        request_me = 0
+        others = self.player.get_others_in_group()
+        for o in others:
+            if o.request_player == self.player.id_in_group and o.request is True:
+                request_me += 1
+        return self.player.is_playing() and self.group.norequests is False \
+            and self.group.num_playing > 1 and request_me > 0
+
+
+class NoTransfers(Page):
+    def is_displayed(self):
+        return self.player.is_playing() and self.group.num_playing > 1 and self.group.norequests
+
+    def vars_for_template(self):
+        return {'herd_size_after_shock': self.player.herd_size_after_shock,
+                }
+
+
+class TransferWait(WaitPage):
+    def is_displayed(self):
+        return self.player.is_playing()
+
+    def after_all_players_arrive(self):
+        self.group.incoming()
+        self.group.outgoing()
+        self.group.final_herd_size()
 
 
 class AllTransfers(Page):
     def vars_for_template(self):
-        all_transfers = self.player.all_transfers()
-        return {'norequests': self.group.norequests,
-                'all_transfers': all_transfers,
-                'round_number': self.subsession.round_number}
+        aps = self.group.get_players()
+        all_transfers = \
+            SendReceive.objects.filter(Q(sender__in=aps) | Q(receiver__in=aps)).values('sender__id_in_group',
+                                                                                       'receiver__id_in_group',
+                                                                                       'amount_sent')
+        print(all_transfers)
+        return {'all_transfers': all_transfers,
+                'herd_size_after_transfers': self.player.herd_size_after_transfers,
+                'request': self.player.request,
+                'request_player': self.player.request_player,
+                'request_amount': self.player.request_amount,
+                }
 
     def is_displayed(self):
-        return self.player.is_playing()
-
-    def before_next_page(self):
-        self.player.incoming()
-        self.player.outgoing()
-        self.player.final_herd_size()
+        return self.player.is_playing() and self.group.num_playing > 1 and self.group.norequests is False
 
 
 class EndYear(Page):
@@ -220,36 +252,65 @@ class EndYear(Page):
         return self.player.is_playing()
 
     def vars_for_template(self):
-        return {'round_number': self.subsession.round_number,
+        aps = self.group.get_players()
+        all_transfers = SendReceive.objects.filter(Q(sender__in=aps) | Q(receiver__in=aps)).values(
+            'sender__id_in_group',
+            'receiver__id_in_group',
+            'amount_sent')
+        print(all_transfers)
+        return {'all_transfers': all_transfers,
                 'herd_size_after_transfers': self.player.herd_size_after_transfers,
                 'other_players': self.player.get_others_in_group(),
                 'under_minimum': self.player.under_minimum,
-                'under_minimum_years_left': self.player.under_minimum_years_left,
+                'under_minimum_years_left_end': self.player.under_minimum_years_left_end,
                 'under_minimum_years_before_death': self.session.config['years_before_death'],
-                'minherd': self.session.config['minherd'],
-                'dead': self.participant.vars['dead']
+                'dead': self.player.dead,
+                'num_players': self.group.num_playing,
+                'dead_remove': self.player.dead_remove,
+                'request': self.player.request,
+                'request_player': self.player.request_player,
+                'request_amount': self.player.request_amount,
                 }
+
+    def before_next_page(self):
+        self.player.set_dead()
+        if self.player.dead:
+            self.player.set_remove_from_game()
+        elif self.player.dead is not True and self.round_number == Constants.num_rounds:
+            self.player.in_round(Constants.num_rounds).rounds_survived = Constants.num_rounds
+            self.player.set_payoff_and_dvs()
 
 
 class Dead(Page):
+    def is_displayed(self):
+        return self.player.dead
+
+
+class EndExperiment(Page):
     def is_displayed(self):
         return self.subsession.round_number == Constants.num_rounds
 
 
 page_sequence = [
     NewYear,
-    WaitPage,
+    NumPlayingWait,
     Growth,
-    WaitPage,
+    Wait,
     Shock,
+    NoPlayersToRequest,
+    Wait,
     Request,
-    WaitPage,
+    RequestsWait,
     RequestPlayer,
     RequestAmount,
-    WaitPage,
+    Wait,
     Fulfill,
-    WaitPage,
+    Wait,
+    NoTransfers,
+    TransferWait,
     AllTransfers,
-    WaitPage,
-    EndYear
+    EndYear,
+    Dead,
+    Wait,
+    EndExperiment
 ]

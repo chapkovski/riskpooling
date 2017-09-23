@@ -5,66 +5,121 @@
     End of <b>Year {{round_number}}</b>
 {% endblock %}
 
-{% block styles %}
-<style type = text/css>
-.redtext {
-     color: #FF0000;
-}
-</style>
-{% endblock %}
-
 {% block content %}
 
 <p>
     Your final herd size this year: <b>{{ herd_size_after_transfers }}</b>
 </p>
 
-<p>
-    Other players' final herd size:
-</p>
-<ul>
-    {% for p in other_players %}
-        <li>Player {{ p.id_in_group }}'s final herd size is <b>{{ p.herd_size_after_transfers }}</b>.</li>
-        <i class="redtext">
-        {% if p.under_minimum == True %}
-            <b>WARNING:</b> Player {{p.id_in_group}}'s herd size is under the minimum threshold of {{minherd|c}}.
-            They have <b>{{ p.under_minimum_years_left }}
-            {% if p.under_minimum_years_left > 1 %}
-                years
-            {% else %}
-                year
-            {% endif %}</b>
-            left to increase their herd size over this minimum threshold, or they will die.
-        {% endif %}
-        </i>
-    {% endfor %}
-</ul>
+{% if charts %}
+    <br>
+    {% include 'riskpooling/chart.html' %}
+{% endif %}
+
+{% if observability %}
+    {% if num_players > 1 %}
+        <p>
+            Other players' final herd size:
+        </p>
+        <ul>
+            {% for p in other_players %}
+                {% if p.dead_remove != True %}
+                    <li>Player {{ p.id_in_group }}'s final herd size is <b>{{ p.herd_size_after_transfers }}</b>.</li>
+                    <i class="redtext">
+                    {% if p.under_minimum %}
+                        <b>WARNING:</b> Player {{p.id_in_group}}'s herd size is under the minimum threshold of {{minherd|c}}.
+                        {% if p.dead == False %}
+                            From the beginning of next year, they will have <b>{{ p.under_minimum_years_left_end }}
+                            {% if p.under_minimum_years_left_end > 1 %}
+                                years
+                            {% else %}
+                                year
+                            {% endif %}</b>
+                            left to increase their herd size over this minimum threshold, or they will die.
+                        {% elif p.dead %}
+                            As they have finished under the minimum threshold for {{under_minimum_years_before_death}} years
+                            in a row, <b>they have died</b> and have been removed from the game indefinitely.
+                        {% endif %}
+                    {% endif %}
+                    </i>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endif %}
 
 <p class="redtext">
-{% if under_minimum == True %}
+{% if under_minimum %}
     {% if dead == False %}
-        <i>WARNING: Your herd size is under the minimum threshold of {{minherd|c}}</i>.
+        <i><b>WARNING:</b> Your herd size is under the minimum threshold of {{minherd|c}}</i>.
         You have finished the year under the minimum threshold. From the beginning of next year,
-        you will have <b>{{under_minimum_years_left}}
-        {% if under_minimum_years_left > 1 %}
+        you will have <b>{{under_minimum_years_left_end}}
+        {% if under_minimum_years_left_end > 1 %}
             years
         {% else %}
             year
         {% endif %}
         </b> left to increase your herd size over the threshold. If, after this time, your herd size is still under
         the minimum threshold, you will die and your game will be over!
-    {% elif dead == True %}
-        <b>Your herd size has remained under the minimum threshold of {{minherd|c}}. As you have finished under the
+    {% elif dead %}
+        <b>
+            Your herd size has remained under the minimum threshold of {{minherd|c}}. As you have finished under the
             minimum threshold for {{under_minimum_years_before_death}} years in a row, <u>you have died</u> and your game is over.
-            Please click Next to end the experiment.</b>
+        </b>
     {% endif %}
 {% endif %}
 </p>
 
 <p>
-    Click Next to proceed to the next year.
+    Click Next to continue.
 </p>
 
 {% next_button %}
+
+<br>
+<br>
+
+<table>
+    <tr>
+        <th>Year {{round_number}} Summary</th>
+        <th></th>
+    </tr>
+    <tr>
+        <td>Current herd size:</td>
+        <td><b>{{herd_size_after_transfers}}</b></td>
+    </tr>
+    <tr>
+        <td>Player you requested help from:</td>
+        <td>
+            <b>
+                {% if request %}
+                    {% if request_player != None %}Player {{request_player}}{% else %}-{% endif %}
+                {% else %}
+                    -
+                {% endif %}
+            </b>
+        </td>
+    </tr>
+    <tr>
+        <td>Amount requested by you:</td>
+        <td><b>{% if request_amount != None %}{{request_amount}}{% else %}-{% endif %}</b></td>
+    </tr>
+    <tr>
+        <td>Amount received:</td>
+        <td>
+            <b>
+                {% if request %}
+                    {% for t in all_transfers %}
+                        {% if t.receiver__id_in_group == player.id_in_group %}
+                            {{t.amount_sent|c}}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    -
+                {% endif %}
+            </b>
+        </td>
+    </tr>
+</table>
 
 {% endblock %}

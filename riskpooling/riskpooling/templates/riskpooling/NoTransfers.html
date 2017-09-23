@@ -1,0 +1,46 @@
+{% extends "global/Page.html" %}
+{% load staticfiles otree_tags %}
+
+{% block title %}
+    <b>Year {{round_number}}</b> - No cattle transfers
+{% endblock %}
+
+{% block content %}
+
+<p>
+    There were no cattle transfers this year.
+</p>
+
+<p>
+    Click Next to continue.
+</p>
+
+{% next_button %}
+
+<br>
+<br>
+
+<table>
+    <tr>
+        <th>Year {{round_number}} Summary</th>
+        <th></th>
+    </tr>
+    <tr>
+        <td>Current herd size:</td>
+        <td><b>{{herd_size_after_shock}}</b></td>
+    </tr>
+    <tr>
+        <td>Player you requested help from:</td>
+        <td><b>-</b></td>
+    </tr>
+    <tr>
+        <td>Amount requested by you:</td>
+        <td><b>-</b></td>
+    </tr>
+    <tr>
+        <td>Amount received:</td>
+        <td><b>-</b></td>
+    </tr>
+</table>
+
+{% endblock %}

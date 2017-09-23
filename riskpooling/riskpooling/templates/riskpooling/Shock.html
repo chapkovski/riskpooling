@@ -5,20 +5,21 @@
     <b>Year {{round_number}}</b> - Herd shock
 {% endblock %}
 
-{% block styles %}
-<style type = text/css>
-.redtext {
-     color: #FF0000;
-}
-</style>
-{% endblock %}
-
 {% block content %}
 
 {% if shock_occurrence == True %}
     <p>
-        A shock has hit your herd this year. As a result of this, your herd has shrunk from
-        {{herd_size_after_growth}} to <b>{{herd_size_after_shock}}</b>.
+        A shock has hit your herd this year.
+        {% if herd_size_after_growth < herd_size_after_shock %}
+            This shock was positive, increasing your herd size from
+            {{ herd_size_after_growth }} to <b>{{ herd_size_after_shock }}</b>.
+        {% elif herd_size_after_growth == herd_size_after_shock %}
+            However, the shock did not affect your cattle.
+            As a result, your herd has not changed from <b>{{ herd_size_after_shock }}</b>.
+        {% else %}
+            As a result of this, your herd reduced from {{ herd_size_after_growth }}
+            to <b>{{ herd_size_after_shock }}</b>.
+        {% endif %}
     </p>
 {% else %}
     <p>
@@ -41,37 +42,74 @@
     </p>
 {% endif %}
 
-<p>Other players:</p>
-<ul>
-    {% for p in other_players %}
-        <li>
-        {% if p.shock_occurrence == True %}
-            Player {{p.id_in_group}} experienced a shock this year. Their herd reduced from
-            {{ p.herd_size_after_growth }} to <b>{{ p.herd_size_after_shock }}</b>.
-        {% else %}
-            Player {{p.id_in_group}} did not experience a shock this year. Their herd did not change from
-            <b>{{ p.herd_size_after_shock }}</b>.
-        {% endif %}
-        </li>
-        <i class="redtext">
-        {% if p.under_minimum == True %}
-            <b>WARNING:</b> Player {{p.id_in_group}}'s herd size is under the minimum threshold of {{minherd|c}}.
-            They have <b>{{ p.under_minimum_years_left }}
-            {% if p.under_minimum_years_left > 1 %}
-                years
-            {% else %}
-                year
-            {% endif %}</b>
-            left to increase their herd size over this minimum threshold, or they will die.
-        {% endif %}
-        </i>
-    {% endfor %}
-</ul>
+{% if charts %}
+    <br>
+    {% include 'riskpooling/chart.html' %}
+{% endif %}
+
+{% if observability %}
+    {% if num_players > 1 %}
+        <p>Other players:</p>
+        <ul>
+            {% for p in other_players %}
+                {% if p.dead_remove != True %}
+                    <li>
+                    {% if p.shock_occurrence == True %}
+                        Player {{p.id_in_group}} experienced a shock this year. Their herd reduced from
+                        {{ p.herd_size_after_growth }} to <b>{{ p.herd_size_after_shock }}</b>.
+                    {% else %}
+                        Player {{p.id_in_group}} did not experience a shock this year. Their herd did not change from
+                        <b>{{ p.herd_size_after_shock }}</b>.
+                    {% endif %}
+                    </li>
+                    <i class="redtext">
+                    {% if p.under_minimum == True %}
+                        <b>WARNING:</b> Player {{p.id_in_group}}'s herd size is under the minimum threshold of {{minherd|c}}.
+                        They have <b>{{ p.under_minimum_years_left }}
+                        {% if p.under_minimum_years_left > 1 %}
+                            years
+                        {% else %}
+                            year
+                        {% endif %}</b>
+                        left to increase their herd size over this minimum threshold, or they will die.
+                    {% endif %}
+                    </i>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endif %}
 
 <p>
     Click Next to continue.
 </p>
 
 {% next_button %}
+
+<br>
+<br>
+
+<table>
+    <tr>
+        <th>Year {{round_number}} Summary</th>
+        <th></th>
+    </tr>
+    <tr>
+        <td>Current herd size:</td>
+        <td><b>{{herd_size_after_shock}}</b></td>
+    </tr>
+    <tr>
+        <td>Player you requested help from:</td>
+        <td><b>-</b></td>
+    </tr>
+    <tr>
+        <td>Amount requested by you:</td>
+        <td><b>-</b></td>
+    </tr>
+    <tr>
+        <td>Amount received:</td>
+        <td><b>-</b></td>
+    </tr>
+</table>
 
 {% endblock %}

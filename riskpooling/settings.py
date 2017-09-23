@@ -93,7 +93,7 @@ mturk_hit_settings = {
 # e.g. self.session.config['participation_fee']
 
 SESSION_CONFIG_DEFAULTS = {
-    'real_world_currency_per_point': 0.000,
+    'real_world_currency_per_point': 0.001,
     'participation_fee': 0.00,
     'doc': "",
     'mturk_hit_settings': mturk_hit_settings,
@@ -102,20 +102,22 @@ SESSION_CONFIG_DEFAULTS = {
 
 SESSION_CONFIGS = [
     {
-        'name': 'riskpooling',
-        'display_name': 'Risk Pooling Game',
+        'name': 'survivalgame',
+        'display_name': 'Survival Game',
         'num_demo_participants': 3,
         'app_sequence': ['riskpooling'],
 
-        'initialherd': 70,
-        'minherd': 64,
+        'initialherd': 10,
+        'minherd': 100,
         'maxherd': 600,
         'growth_rate_mean': 0.034,
         'growth_rate_sd': 0.0253,
         'shock_rate': 0.1,
         'shock_size_mean': 0.3,
         'shock_size_sd': 0.1,
-        'years_before_death': 3,
+        'years_before_death': 2,
+        'observability': False,
+        'charts': True
     }
 ]
 

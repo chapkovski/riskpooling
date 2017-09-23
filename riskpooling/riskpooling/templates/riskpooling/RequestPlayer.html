@@ -5,24 +5,13 @@
     <b>Year {{round_number}}</b> - Request
 {% endblock %}
 
-{% block styles %}
-<style>
-ul#id_request_player {
-     list-style-type: none;
-}
-.redtext {
-     color: #FF0000;
-}
-</style>
-{% endblock %}
-
 {% block content %}
 
 <p>
     Your current herd size is <b>{{herd_size_after_shock}}</b>.
 </p>
 
-{% if under_minimum == True %}
+{% if under_minimum %}
     <p class="redtext">
         <i>
             <b>WARNING:</b> Your herd size is under the minimum threshold of {{minherd|c}}.
@@ -37,26 +26,35 @@ ul#id_request_player {
     </p>
 {% endif %}
 
-<p>Other players:</p>
-<ul>
-    {% for p in other_players %}
-        <li>
-            Player {{p.id_in_group}}'s current herd size is <b>{{ p.herd_size_after_shock }}</b>.
-        </li>
-        <i class="redtext">
-        {% if p.under_minimum == True %}
-            <b>WARNING:</b> Player {{p.id_in_group}}'s herd size is under the minimum threshold of {{minherd|c}}.
-            They have <b>{{ p.under_minimum_years_left }}
-            {% if p.under_minimum_years_left > 1 %}
-                years
-            {% else %}
-                year
-            {% endif %}</b>
-            left to increase their herd size over this minimum threshold, or they will die.
-        {% endif %}
-        </i>
-    {% endfor %}
-</ul>
+{% if charts %}
+    <br>
+    {% include 'riskpooling/chart.html' %}
+{% endif %}
+
+{% if observability %}
+    <p>Other players:</p>
+    <ul>
+        {% for p in other_players %}
+            {% if p.dead_remove != True %}
+                <li>
+                    Player {{p.id_in_group}}'s current herd size is <b>{{ p.herd_size_after_shock }}</b>.
+                </li>
+                <i class="redtext">
+                {% if p.under_minimum %}
+                    <b>WARNING:</b> Player {{p.id_in_group}}'s herd size is under the minimum threshold of {{minherd|c}}.
+                    They have <b>{{ p.under_minimum_years_left }}
+                    {% if p.under_minimum_years_left > 1 %}
+                        years
+                    {% else %}
+                        year
+                    {% endif %}</b>
+                    left to increase their herd size over this minimum threshold, or they will die.
+                {% endif %}
+                </i>
+            {% endif %}
+        {% endfor %}
+    </ul>
+{% endif %}
 
 <br>
 
@@ -64,12 +62,38 @@ ul#id_request_player {
     <b>You would like to make a request for cattle.</b>
 </p>
 
-{{myform}}
+{% formfield player.request_player %}
 
 <p>
     Click Next to continue.
 </p>
 
 {% next_button %}
+
+<br>
+<br>
+
+<table>
+    <tr>
+        <th>Year {{round_number}} Summary</th>
+        <th></th>
+    </tr>
+    <tr>
+        <td>Current herd size:</td>
+        <td><b>{{herd_size_after_shock}}</b></td>
+    </tr>
+    <tr>
+        <td>Player you requested help from:</td>
+        <td><b>-</b></td>
+    </tr>
+    <tr>
+        <td>Amount requested by you:</td>
+        <td><b>-</b></td>
+    </tr>
+    <tr>
+        <td>Amount received:</td>
+        <td><b>-</b></td>
+    </tr>
+</table>
 
 {% endblock %}
