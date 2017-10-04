@@ -154,7 +154,7 @@ class RequestAmount(Page):
 
     def before_next_page(self):
         if self.player.request:
-            target = Player.objects.get(id_in_group=self.player.request_player, subsession=self.subsession)
+            target = Player.objects.get(id_in_group=self.player.request_player, subsession=self.subsession, group=self.group)
             sr, created = self.player.receiver.get_or_create(sender=target,
                                                              defaults={'amount_requested': self.player.request_amount})
             sr.save()
@@ -171,6 +171,7 @@ class Fulfill(Page):
         formset = SRFormSet(self.request.POST, instance=self.player)
         context['formset'] = formset
         if not formset.is_valid():
+            print('JOPA:: ', formset.errors)
             return self.render_to_response(context)
         formset.save()
         return super().post()
@@ -206,7 +207,7 @@ class Fulfill(Page):
             if o.request_player == self.player.id_in_group and o.request is True:
                 request_me += 1
         return self.player.is_playing() and self.group.norequests is False \
-            and self.group.num_playing > 1 and request_me > 0
+               and self.group.num_playing > 1 and request_me > 0
 
 
 class NoTransfers(Page):
@@ -244,7 +245,7 @@ class AllTransfers(Page):
                 }
 
     def is_displayed(self):
-        return self.player.is_playing() and self.group.num_playing > 1 and self.group.norequests is False
+        return self.player.is_playing() and self.group.num_playing > 1 and not self.group.norequests
 
 
 class EndYear(Page):

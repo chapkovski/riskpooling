@@ -30,7 +30,6 @@ class BaseSRFormset(BaseInlineFormSet):
         if tot_amount_sent > max_sent:
             raise forms.ValidationError("The maximum amount you can send is {}".format(max_sent))
 
-
 SRFormSet = inlineformset_factory(Player, SendReceive,
                                   fk_name='sender',
                                   can_delete=False,
