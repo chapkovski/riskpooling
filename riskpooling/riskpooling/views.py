@@ -17,31 +17,39 @@ def vars_for_all_templates(self):
             }
 
 
-class Wait(WaitPage):
+
+class PlayingPage(Page):
     def is_displayed(self):
-        return self.player.is_playing()
+        return self.player.is_playing() and self.extra_is_displayed()
+
+    def extra_is_displayed(self):
+        return True
+
+class PlayingWaitPage(WaitPage):
+    def is_displayed(self):
+        return self.player.is_playing() and self.extra_is_displayed()
+
+    def extra_is_displayed(self):
+        return True
 
 
-class NewYear(Page):
-    def is_displayed(self):
-        return self.player.is_playing()
+class Wait(PlayingWaitPage):
+    ...
+
+class NewYear(PlayingPage):
 
     def before_next_page(self):
         self.player.set_growth()
         self.player.set_under_minimum_years_left()
 
 
-class NumPlayingWait(WaitPage):
-    def is_displayed(self):
-        return self.player.is_playing()
+class NumPlayingWait(PlayingWaitPage):
 
     def after_all_players_arrive(self):
         self.group.set_num_playing()
 
 
-class Growth(Page):
-    def is_displayed(self):
-        return self.player.is_playing()
+class Growth(PlayingPage):
 
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
@@ -57,9 +65,7 @@ class Growth(Page):
         self.player.set_shock()
 
 
-class Shock(Page):
-    def is_displayed(self):
-        return self.player.is_playing()
+class Shock(PlayingPage):
 
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
@@ -73,20 +79,20 @@ class Shock(Page):
                 }
 
 
-class NoPlayersToRequest(Page):
-    def is_displayed(self):
-        return self.player.is_playing() and self.group.num_playing == 1
+class NoPlayersToRequest(PlayingPage):
+    def extra_is_displayed(self):
+        return self.group.num_playing == 1
 
     def vars_for_template(self):
         return {'herd_size_after_shock': self.player.herd_size_after_shock}
 
 
-class Request(Page):
+class Request(PlayingPage):
     form_model = models.Player
     form_fields = ['request']
 
-    def is_displayed(self):
-        return self.player.is_playing() and self.group.num_playing > 1
+    def extra_is_displayed(self):
+        return self.group.num_playing > 1
 
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
@@ -101,17 +107,17 @@ class Request(Page):
         self.player.set_request_player()
 
 
-class RequestsWait(WaitPage):
-    def is_displayed(self):
-        return self.player.is_playing() and self.group.num_playing > 1
+class RequestsWait(PlayingWaitPage):
+    def extra_is_displayed(self):
+        return self.group.num_playing > 1
 
     def after_all_players_arrive(self):
         self.group.no_requests()
 
 
-class RequestPlayer(Page):
-    def is_displayed(self):
-        return self.player.is_playing() and self.player.request and self.group.num_playing > 2
+class RequestPlayer(PlayingPage):
+    def extra_is_displayed(self):
+        return self.player.request and self.group.num_playing > 2
 
     form_model = models.Player
     form_fields = ['request_player']
@@ -131,15 +137,15 @@ class RequestPlayer(Page):
                 }
 
 
-class RequestAmount(Page):
+class RequestAmount(PlayingPage):
     form_model = models.Player
     form_fields = ['request_amount']
 
     def request_amount_max(self):
         return self.session.config['maxherd'] - self.participant.vars['herd_size']
 
-    def is_displayed(self):
-        return self.player.is_playing() and self.player.request and self.group.num_playing > 1
+    def extra_is_displayed(self):
+        return self.player.request and self.group.num_playing > 1
 
     def vars_for_template(self):
         return {'under_minimum': self.player.under_minimum,
@@ -160,7 +166,7 @@ class RequestAmount(Page):
             sr.save()
 
 
-class Fulfill(Page):
+class Fulfill(PlayingPage):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['formset'] = SRFormSet(instance=self.player)
@@ -199,28 +205,26 @@ class Fulfill(Page):
                 'dead_remove': self.player.dead_remove,
                 }
 
-    def is_displayed(self):
+    def extra_is_displayed(self):
         request_me = 0
         others = self.player.get_others_in_group()
         for o in others:
             if o.request_player == self.player.id_in_group and o.request is True:
                 request_me += 1
-        return self.player.is_playing() and self.group.norequests is False \
+        return not self.group.norequests \
                and self.group.num_playing > 1 and request_me > 0
 
 
-class NoTransfers(Page):
-    def is_displayed(self):
-        return self.player.is_playing() and self.group.num_playing > 1 and self.group.norequests
+class NoTransfers(PlayingPage):
+    def extra_is_displayed(self):
+        return self.group.num_playing > 1 and self.group.norequests
 
     def vars_for_template(self):
         return {'herd_size_after_shock': self.player.herd_size_after_shock,
                 }
 
 
-class TransferWait(WaitPage):
-    def is_displayed(self):
-        return self.player.is_playing()
+class TransferWait(PlayingWaitPage):
 
     def after_all_players_arrive(self):
         self.group.incoming()
@@ -228,7 +232,7 @@ class TransferWait(WaitPage):
         self.group.final_herd_size()
 
 
-class AllTransfers(Page):
+class AllTransfers(PlayingPage):
     def vars_for_template(self):
         aps = self.group.get_players()
         all_transfers = \
@@ -243,13 +247,11 @@ class AllTransfers(Page):
                 'request_amount': self.player.request_amount,
                 }
 
-    def is_displayed(self):
-        return self.player.is_playing() and self.group.num_playing > 1 and not self.group.norequests
+    def extra_is_displayed(self):
+        return self.group.num_playing > 1 and not self.group.norequests
 
 
-class EndYear(Page):
-    def is_displayed(self):
-        return self.player.is_playing()
+class EndYear(PlayingPage):
 
     def vars_for_template(self):
         aps = self.group.get_players()
