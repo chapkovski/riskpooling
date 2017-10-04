@@ -171,7 +171,6 @@ class Fulfill(Page):
         formset = SRFormSet(self.request.POST, instance=self.player)
         context['formset'] = formset
         if not formset.is_valid():
-            print('JOPA:: ', formset.errors)
             return self.render_to_response(context)
         formset.save()
         return super().post()
